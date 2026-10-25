@@ -1,0 +1,5 @@
+numpy
+scipy
+matplotlib
+scikit-learn>=1.5,<2
+joblib>=1.4,<2
