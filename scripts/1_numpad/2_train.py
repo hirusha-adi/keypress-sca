@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import argparse
 import csv
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass
 import hashlib
 import importlib.metadata
 import json
@@ -23,6 +23,7 @@ import tempfile
 
 import joblib
 import numpy as np
+from threadpoolctl import threadpool_limits
 from sklearn.metrics import (
     accuracy_score,
     balanced_accuracy_score,
@@ -32,12 +33,11 @@ from sklearn.metrics import (
 )
 
 from keypress_model import (
-    FEATURE_MODES,
     MODEL_SCHEMA_VERSION,
     FeatureConfig,
     build_classifier,
-    extract_features,
-    feature_variants,
+    decode_audio,
+    feature_variants_from_waveform,
 )
 
 
@@ -45,17 +45,25 @@ REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_DATASET = REPOSITORY / "datasets" / "1_numpad"
 DEFAULT_OUTPUT = REPOSITORY / "work" / "1_numpad"
 CLASSES = tuple(str(key) for key in range(10))
-C_VALUES = (1.0, 10.0)
 CV_FOLDS = 4
+CV_PARTITIONS = (3, 4, 5)
 HOLDOUT_FRACTION = 0.20
 PURGE_NEIGHBORS = 1
+RANDOM_SEED = 42
+SELECTION_RULE = (
+    "Highest pooled repeated development CV accuracy, then highest worst-fold accuracy, "
+    "then fewer features; remaining ties prefer linear, LDA, RBF, lower C, "
+    "the default gamma, and stable profile order."
+)
 LIMITATIONS = [
     "Each key has one source recording. Recording identity is confounded with the key label.",
     "Chronological held-out clips measure later presses within the same recordings; "
     "they do not measure generalization to a new recording session, phone, keyboard, or environment.",
     "The final keypress_model.joblib is refitted on all clips, including the evaluation holdout. "
     "Use evaluation_model.joblib to reproduce held-out predictions.",
-    "SVM decision scores are ranking scores, not calibrated probabilities.",
+    "Classifier decision scores are ranking scores, not calibrated probabilities.",
+    "Repeated CV reuses development clips across three partitions. Its prediction count "
+    "is not a count of independent recordings or unique clips.",
 ]
 
 
@@ -115,11 +123,13 @@ def holdout_split(samples: list[Sample]) -> tuple[np.ndarray, np.ndarray, np.nda
 
 
 def development_folds(
-    samples: list[Sample], development: np.ndarray
+    samples: list[Sample], development: np.ndarray, n_splits: int = CV_FOLDS
 ) -> list[tuple[np.ndarray, np.ndarray, np.ndarray]]:
-    """Split each class into four contiguous blocks and purge adjacent presses."""
+    """Split each class into contiguous blocks and purge adjacent presses."""
+    if not isinstance(n_splits, int) or n_splits < 2:
+        raise ValueError("n_splits must be an integer of at least 2")
     folds = []
-    for fold_index in range(CV_FOLDS):
+    for fold_index in range(n_splits):
         training, validation, purged = [], [], []
         for label in CLASSES:
             indices = np.asarray(
@@ -129,7 +139,7 @@ def development_folds(
                 ),
                 dtype=np.int64,
             )
-            block = np.array_split(indices, CV_FOLDS)[fold_index]
+            block = np.array_split(indices, n_splits)[fold_index]
             if not len(block):
                 raise ValueError(f"key {label}: an empty validation block was produced")
             first = int(np.flatnonzero(indices == block[0])[0])
@@ -144,6 +154,65 @@ def development_folds(
             purged.extend(purged_for_class.tolist())
         folds.append(tuple(np.asarray(part, dtype=np.int64) for part in (training, validation, purged)))
     return folds
+
+
+def repeated_development_folds(samples: list[Sample], development: np.ndarray) -> list[dict]:
+    """Keep each validation clip contiguous within its source class in all repeats."""
+    return [
+        {"n_splits": n_splits, "fold": fold_index + 1,
+         "training": training, "validation": validation, "purged": purged}
+        for n_splits in CV_PARTITIONS
+        for fold_index, (training, validation, purged) in enumerate(
+            development_folds(samples, development, n_splits)
+        )
+    ]
+
+
+def feature_profiles() -> list[tuple[str, FeatureConfig]]:
+    return [
+        ("legacy_mfcc20", FeatureConfig(mode="mfcc_stats", n_mfcc=20)),
+        ("weighted_mfcc20", FeatureConfig(mode="mfcc_weighted", n_mfcc=20)),
+        ("weighted_mfcc30", FeatureConfig(mode="mfcc_weighted", n_mfcc=30)),
+        ("weighted_mfcc30_sqrt", FeatureConfig(
+            mode="mfcc_weighted", n_mfcc=30, energy_weight_power=0.5
+        )),
+        ("weighted_mfcc40_sqrt", FeatureConfig(
+            mode="mfcc_weighted", n_mfcc=40, energy_weight_power=0.5
+        )),
+        ("short_mfcc30", FeatureConfig(
+            mode="mfcc_stats", n_mfcc=30, duration_seconds=0.096,
+            pre_peak_seconds=0.008, hop_length=64
+        )),
+    ]
+
+
+def classifier_candidates(dimensions: int) -> list[dict]:
+    """Twelve fixed classifier settings per profile; no test-score feedback."""
+    return (
+        [{"kind": "rbf", "C": c_value, "gamma": gamma}
+         for c_value in (1.0, 10.0) for gamma in ("scale", 0.3 / dimensions, 3.0 / dimensions)]
+        + [{"kind": "linear", "C": c_value} for c_value in (0.001, 0.01, 0.1)]
+        + [{"kind": "lda", "shrinkage": shrinkage} for shrinkage in (0.1, 0.5, "auto")]
+    )
+
+
+def candidate_pipeline(settings: dict):
+    return build_classifier(
+        settings.get("C", 1.0), kind=settings["kind"],
+        gamma=settings.get("gamma", "scale"), shrinkage=settings.get("shrinkage", 0.5),
+    )
+
+
+def candidate_selection_key(candidate: dict) -> tuple:
+    """Deterministic accuracy/robustness/simplicity ordering for model selection."""
+    settings = candidate["classifier"]
+    gamma = settings.get("gamma", "scale")
+    return (
+        -candidate["pooled_cv_accuracy"], -candidate["worst_fold_accuracy"],
+        candidate["feature_count"], {"linear": 0, "lda": 1, "rbf": 2}[settings["kind"]],
+        settings.get("C", 0.0), gamma != "scale", 0.0 if gamma == "scale" else gamma,
+        candidate["profile_order"], str(settings.get("shrinkage", "")),
+    )
 
 
 def source_provenance(dataset: Path) -> dict:
@@ -215,80 +284,111 @@ def save_confusion_matrix(matrix: np.ndarray, accuracy: float, output: Path) -> 
 def train(dataset: Path, output: Path) -> dict:
     samples = discover_samples(dataset)
     development, boundary_purge, holdout = holdout_split(samples)
-    folds = development_folds(samples, development)
+    folds = repeated_development_folds(samples, development)
     provenance = source_provenance(dataset)
     print(f"Dataset: {len(samples)} clips; development={len(development)}, "
           f"boundary purge={len(boundary_purge)}, holdout={len(holdout)}", flush=True)
-    config = FeatureConfig()
-    cache = {mode: {} for mode in FEATURE_MODES}
+    profiles = feature_profiles()
+    configs = dict(profiles)
+    cache = {name: {} for name, _ in profiles}
+    decoded = {}
     for position, index in enumerate(development, 1):
         sample = samples[index]
         try:
-            variants = feature_variants(sample.path, config)
+            waveform = decode_audio(sample.path, profiles[0][1].sample_rate)
+            decoded[int(index)] = waveform
+            for name, config in profiles:
+                cache[name][int(index)] = feature_variants_from_waveform(waveform, config)[config.mode]
         except (ValueError, OSError) as error:
             raise ValueError(f"{sample.path}: {error}") from error
-        for mode in FEATURE_MODES:
-            cache[mode][int(index)] = variants[mode]
         if position % 25 == 0 or position == len(development):
             print(f"Extracted development features: {position}/{len(development)}", flush=True)
 
     labels = np.asarray([sample.label for sample in samples])
     local_index = {int(index): position for position, index in enumerate(development)}
     candidates = []
-    for mode in FEATURE_MODES:
-        matrix = np.stack([cache[mode][int(index)] for index in development])
-        for c_value in C_VALUES:
-            oof_predictions = np.empty(len(development), dtype="<U1")
-            fold_results = []
-            for fold_index, (training, validation, purge) in enumerate(folds):
-                local_train = [local_index[int(index)] for index in training]
-                local_validation = [local_index[int(index)] for index in validation]
-                pipeline = build_classifier(c_value)
-                pipeline.fit(matrix[local_train], labels[training])
-                predictions = pipeline.predict(matrix[local_validation])
-                oof_predictions[local_validation] = predictions
-                fold_results.append({
-                    "fold": fold_index + 1,
-                    "training_count": len(training),
-                    "validation_count": len(validation),
-                    "purged_count": len(purge),
-                    "correct": int(np.sum(predictions == labels[validation])),
-                    "accuracy": float(accuracy_score(labels[validation], predictions)),
+    repeated_truth = np.tile(labels[development], len(CV_PARTITIONS))
+    with threadpool_limits(limits=1):
+        for profile_order, (name, config) in enumerate(profiles):
+            matrix = np.stack([cache[name][int(index)] for index in development])
+            for settings in classifier_candidates(matrix.shape[1]):
+                partition_predictions = {
+                    n_splits: np.empty(len(development), dtype=labels.dtype)
+                    for n_splits in CV_PARTITIONS
+                }
+                fold_results = []
+                for fold in folds:
+                    training, validation, purge = fold["training"], fold["validation"], fold["purged"]
+                    local_train = [local_index[int(index)] for index in training]
+                    local_validation = [local_index[int(index)] for index in validation]
+                    pipeline = candidate_pipeline(settings)
+                    pipeline.fit(matrix[local_train], labels[training])
+                    predictions = pipeline.predict(matrix[local_validation])
+                    partition_predictions[fold["n_splits"]][local_validation] = predictions
+                    fold_results.append({
+                        "n_splits": fold["n_splits"], "fold": fold["fold"],
+                        "training_count": len(training),
+                        "validation_count": len(validation),
+                        "purged_count": len(purge),
+                        "correct": int(np.sum(predictions == labels[validation])),
+                        "accuracy": float(accuracy_score(labels[validation], predictions)),
+                    })
+                oof_predictions = np.concatenate([partition_predictions[n] for n in CV_PARTITIONS])
+                correct = int(np.sum(oof_predictions == repeated_truth))
+                accuracy = correct / len(repeated_truth)
+                worst = min(fold["accuracy"] for fold in fold_results)
+                candidates.append({
+                    "profile": name, "profile_order": profile_order,
+                    "mode": config.mode, "feature_config": asdict(config),
+                    "classifier": settings, "kind": settings["kind"],
+                    **({key: value for key, value in settings.items() if key != "kind"}),
+                    "correct": correct, "sample_count": len(repeated_truth),
+                    "validation_prediction_count": len(repeated_truth),
+                    "unique_sample_count": len(development),
+                    "pooled_cv_accuracy": accuracy, "worst_fold_accuracy": worst,
+                    "pooled_cv_macro_f1": float(f1_score(
+                        repeated_truth, oof_predictions, labels=CLASSES, average="macro", zero_division=0
+                    )),
+                    "feature_count": int(matrix.shape[1]), "folds": fold_results,
+                    "partitions": [{
+                        "n_splits": n_splits,
+                        "correct": int(np.sum(partition_predictions[n_splits] == labels[development])),
+                        "validation_prediction_count": len(development),
+                        "accuracy": float(accuracy_score(labels[development], partition_predictions[n_splits])),
+                    } for n_splits in CV_PARTITIONS],
                 })
-            correct = int(np.sum(oof_predictions == labels[development]))
-            accuracy = correct / len(development)
-            candidates.append({
-                "mode": mode, "C": c_value, "correct": correct,
-                "sample_count": len(development), "pooled_cv_accuracy": accuracy,
-                "pooled_cv_macro_f1": float(f1_score(
-                    labels[development], oof_predictions, labels=CLASSES, average="macro", zero_division=0
-                )),
-                "feature_count": int(matrix.shape[1]), "folds": fold_results,
-            })
-            print(f"Development CV: {mode}, C={c_value:g}: {accuracy:.1%} ({correct}/{len(development)})", flush=True)
-    selected = min(candidates, key=lambda item: (-item["correct"], item["C"], FEATURE_MODES.index(item["mode"])))
-    selected_config = replace(config, mode=selected["mode"])
-    print(f"Selected {selected['mode']}, C={selected['C']:g}; evaluating held-out clips once", flush=True)
-    chosen_cache = cache[selected["mode"]]
+                print(f"Development CV: {name}, {settings}: {accuracy:.2%} "
+                      f"({correct}/{len(repeated_truth)} predictions; {len(development)} unique clips), "
+                      f"worst fold {worst:.2%}", flush=True)
+    selected = min(candidates, key=candidate_selection_key)
+    selected_config = configs[selected["profile"]]
+    print(f"Selected {selected['profile']}, {selected['classifier']}; evaluating held-out clips once", flush=True)
+    chosen_cache = cache[selected["profile"]]
     features = []
     for index, sample in enumerate(samples):
         if index not in chosen_cache:
             try:
-                chosen_cache[index] = extract_features(sample.path, selected_config)
+                if index not in decoded:
+                    decoded[index] = decode_audio(sample.path, selected_config.sample_rate)
+                chosen_cache[index] = feature_variants_from_waveform(
+                    decoded[index], selected_config
+                )[selected_config.mode]
             except (ValueError, OSError) as error:
                 raise ValueError(f"{sample.path}: {error}") from error
         features.append(chosen_cache[index])
     matrix = np.stack(features)
-    evaluation_model = build_classifier(selected["C"])
-    evaluation_model.fit(matrix[development], labels[development])
-    predictions = evaluation_model.predict(matrix[holdout])
-    ranked, ranked_scores = rank_classes(evaluation_model, matrix[holdout])
+    with threadpool_limits(limits=1):
+        evaluation_model = candidate_pipeline(selected["classifier"])
+        evaluation_model.fit(matrix[development], labels[development])
+        predictions = evaluation_model.predict(matrix[holdout])
+        ranked, ranked_scores = rank_classes(evaluation_model, matrix[holdout])
     metrics = make_metrics(labels[holdout], predictions, ranked)
     print(f"Held-out accuracy: {metrics['accuracy']:.1%} ({metrics['correct']}/{len(holdout)}); "
           f"top-3: {metrics['top3_accuracy']:.1%}; macro-F1: {metrics['macro_f1']:.3f}", flush=True)
     print("Refitting the selected configuration on all clips for deployment", flush=True)
-    final_model = build_classifier(selected["C"])
-    final_model.fit(matrix, labels)
+    with threadpool_limits(limits=1):
+        final_model = candidate_pipeline(selected["classifier"])
+        final_model.fit(matrix, labels)
 
     def names(indices):
         return [samples[int(index)].path.relative_to(dataset).as_posix() for index in indices]
@@ -304,11 +404,20 @@ def train(dataset: Path, output: Path) -> dict:
     versions = {"python": platform.python_version()}
     for distribution in ("numpy", "scipy", "scikit-learn", "joblib", "matplotlib"):
         versions[distribution] = importlib.metadata.version(distribution)
+    implementation_hashes = {
+        name: sha256(Path(__file__).with_name(name))
+        for name in ("2_train.py", "keypress_model.py")
+    }
     common_metadata = {
         "dataset_fingerprint": fingerprint,
         "dataset_directory": str(dataset),
-        "selected_parameters": {"mode": selected["mode"], "C": selected["C"], "kernel": "rbf", "gamma": "scale"},
+        "selected_parameters": {
+            "profile": selected["profile"], "mode": selected["mode"], **selected["classifier"]
+        },
         "library_versions": versions,
+        "implementation_sha256": implementation_hashes,
+        "random_seed": RANDOM_SEED,
+        "selection_rule": SELECTION_RULE,
         "limitations": LIMITATIONS,
         "heldout_accuracy": metrics["accuracy"],
         "heldout_macro_f1": metrics["macro_f1"],
@@ -329,19 +438,35 @@ def train(dataset: Path, output: Path) -> dict:
         "sample_count": len(samples),
         "class_counts": {label: int(np.sum(labels == label)) for label in CLASSES},
         "feature_config": asdict(selected_config), "selected_candidate": selected,
-        "selection_rule": "Highest pooled development CV accuracy; ties prefer lower C, then FEATURE_MODES order.",
+        "selection_rule": SELECTION_RULE,
         "candidate_results": candidates,
+        "search": {
+            "feature_profiles": [{"name": name, "config": asdict(config)} for name, config in profiles],
+            "candidate_count": len(candidates),
+            "partition_fold_counts": list(CV_PARTITIONS), "fold_count": len(folds),
+            "validation_prediction_count": len(repeated_truth),
+            "unique_validation_clip_count": len(development),
+            "prediction_count_note": "Each development clip is evaluated once per partition. "
+            "The repeated prediction denominator is not a count of independent audio clips.",
+            "random_seed": RANDOM_SEED, "shuffle": False, "threadpool_limit": 1,
+            "external_test_data_used": False,
+        },
         "split_protocol": {
             "description": "Latest ceil(20%) per key held out chronologically; one preceding clip per key purged. "
-            "Four contiguous development validation blocks per key, each with one adjacent clip on both sides purged from training.",
+            "Development validation repeats contiguous 3-, 4-, and 5-fold partitions per key, "
+            "each with one adjacent clip on both sides purged from training.",
             "holdout_fraction": HOLDOUT_FRACTION, "purge_neighbors": PURGE_NEIGHBORS,
             "development_count": len(development), "boundary_purge_count": len(boundary_purge), "holdout_count": len(holdout),
             "development": names(development), "boundary_purge": names(boundary_purge), "holdout": names(holdout),
-            "development_folds": [{"fold": i + 1, "training": names(training), "validation": names(validation),
-                                   "purged": names(purge)} for i, (training, validation, purge) in enumerate(folds)],
+            "development_folds": [{
+                "n_splits": fold["n_splits"], "fold": fold["fold"],
+                "training": names(fold["training"]), "validation": names(fold["validation"]),
+                "purged": names(fold["purged"]),
+            } for fold in folds],
         },
         "heldout_metrics": metrics, "samples": sample_metadata,
         "provenance": provenance, "library_versions": versions,
+        "implementation_sha256": implementation_hashes,
         "final_model_training_sample_count": len(samples),
         "evaluation_model_training_sample_count": len(development),
         "limitations": LIMITATIONS,

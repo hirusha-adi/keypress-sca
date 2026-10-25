@@ -1,0 +1,254 @@
+{
+  "schema_version": 1,
+  "test_sequence": "0789123456",
+  "source": "datasets/1_tests/0789123456.m4a",
+  "source_sha256": "c642f463e6347a305c0bbb6788a0760683ae249e0be4aa9cd5f2ed4c482f52cc",
+  "split_manifest_sha256": "b7bc8baf75206ca08f46d0eaaa19d8e07daf0d4c797eeff5e038f34539db2403",
+  "model": "work/1_numpad/keypress_model.joblib",
+  "model_sha256": "fd50f8d6bb50ecf4b750967a169528f6c1e4205ecc892a903dbe8d78eace1315",
+  "model_training_sample_count": 251,
+  "model_fitted_on_test_recording": false,
+  "training_test_clip_hashes_disjoint": true,
+  "sample_count": 10,
+  "correct": 5,
+  "accuracy": 0.5,
+  "top3_correct": 9,
+  "top3_accuracy": 0.9,
+  "expected_sequence": "0789123456",
+  "predicted_sequence": "0899113159",
+  "score_type": "SVM decision scores; not probabilities",
+  "note": "One newly recorded sequence with one example of each key; no model retraining or tuning was performed.",
+  "predictions": [
+    {
+      "press_number": 1,
+      "file": "0789123456/1-0.mp3",
+      "actual_key": "0",
+      "predicted_key": "0",
+      "correct": true,
+      "top3_correct": true,
+      "ranked_keys": [
+        {
+          "key": "0",
+          "score": 9.240898805080414
+        },
+        {
+          "key": "1",
+          "score": 8.21318669086901
+        },
+        {
+          "key": "2",
+          "score": 7.20786200732293
+        }
+      ],
+      "sha256": "8ebd95b647fd8396af8ca1841b22ac373edbb6013e4c57f56e4ed4828b1dda28"
+    },
+    {
+      "press_number": 2,
+      "file": "0789123456/2-7.mp3",
+      "actual_key": "7",
+      "predicted_key": "8",
+      "correct": false,
+      "top3_correct": true,
+      "ranked_keys": [
+        {
+          "key": "8",
+          "score": 9.26683740808135
+        },
+        {
+          "key": "7",
+          "score": 8.238476056786293
+        },
+        {
+          "key": "1",
+          "score": 7.1814635900756185
+        }
+      ],
+      "sha256": "b140458c99b172590062842cf5b5d5e4d2c90a44efcb4e5fdb24e6ff9d842043"
+    },
+    {
+      "press_number": 3,
+      "file": "0789123456/3-8.mp3",
+      "actual_key": "8",
+      "predicted_key": "9",
+      "correct": false,
+      "top3_correct": false,
+      "ranked_keys": [
+        {
+          "key": "9",
+          "score": 9.273071221858096
+        },
+        {
+          "key": "7",
+          "score": 8.16650517973742
+        },
+        {
+          "key": "1",
+          "score": 7.227251803309351
+        }
+      ],
+      "sha256": "28f93e74c78898c40f1924ab4a8212b6d82522a7142a7ebd7619dd02db50fb10"
+    },
+    {
+      "press_number": 4,
+      "file": "0789123456/4-9.mp3",
+      "actual_key": "9",
+      "predicted_key": "9",
+      "correct": true,
+      "top3_correct": true,
+      "ranked_keys": [
+        {
+          "key": "9",
+          "score": 9.262987060042262
+        },
+        {
+          "key": "8",
+          "score": 8.24710101068283
+        },
+        {
+          "key": "1",
+          "score": 7.205563404554016
+        }
+      ],
+      "sha256": "a9bcbd9a315e37e42f1e9ce0cc118a594b46a05afb03b1b40874451d5c3bde1f"
+    },
+    {
+      "press_number": 5,
+      "file": "0789123456/5-1.mp3",
+      "actual_key": "1",
+      "predicted_key": "1",
+      "correct": true,
+      "top3_correct": true,
+      "ranked_keys": [
+        {
+          "key": "1",
+          "score": 9.258285395129626
+        },
+        {
+          "key": "2",
+          "score": 8.26225242819333
+        },
+        {
+          "key": "4",
+          "score": 7.2005054694699595
+        }
+      ],
+      "sha256": "9d47e988447d55d05ef330a7fae80e896b3eed9f6804d8abca97db4d8f8301b3"
+    },
+    {
+      "press_number": 6,
+      "file": "0789123456/6-2.mp3",
+      "actual_key": "2",
+      "predicted_key": "1",
+      "correct": false,
+      "top3_correct": true,
+      "ranked_keys": [
+        {
+          "key": "1",
+          "score": 9.280489791550021
+        },
+        {
+          "key": "2",
+          "score": 8.220889456715291
+        },
+        {
+          "key": "7",
+          "score": 7.1409681185505605
+        }
+      ],
+      "sha256": "13f670e39cffdaba4b5ecb446df43f9f28dc7d8eab0be9cc3ac9fad352018e65"
+    },
+    {
+      "press_number": 7,
+      "file": "0789123456/7-3.mp3",
+      "actual_key": "3",
+      "predicted_key": "3",
+      "correct": true,
+      "top3_correct": true,
+      "ranked_keys": [
+        {
+          "key": "3",
+          "score": 9.269540236334183
+        },
+        {
+          "key": "1",
+          "score": 8.24702783916159
+        },
+        {
+          "key": "2",
+          "score": 7.178940913490276
+        }
+      ],
+      "sha256": "08f45b8c17872e05be688beeb27e3879a51289e91ad6ab0e2d7992f5547d3162"
+    },
+    {
+      "press_number": 8,
+      "file": "0789123456/8-4.mp3",
+      "actual_key": "4",
+      "predicted_key": "1",
+      "correct": false,
+      "top3_correct": true,
+      "ranked_keys": [
+        {
+          "key": "1",
+          "score": 9.265268017974943
+        },
+        {
+          "key": "4",
+          "score": 8.242083137106887
+        },
+        {
+          "key": "7",
+          "score": 7.147193966118566
+        }
+      ],
+      "sha256": "afc59a3bbb8491202f31d1e6fb8e5abd9e219b85593bfbbcc7c165b4e2690cb3"
+    },
+    {
+      "press_number": 9,
+      "file": "0789123456/9-5.mp3",
+      "actual_key": "5",
+      "predicted_key": "5",
+      "correct": true,
+      "top3_correct": true,
+      "ranked_keys": [
+        {
+          "key": "5",
+          "score": 9.270518293539654
+        },
+        {
+          "key": "3",
+          "score": 8.167305974692532
+        },
+        {
+          "key": "7",
+          "score": 7.151328025102443
+        }
+      ],
+      "sha256": "1e9a729182036250c807924481177e6c2a302db4257a46e183266fc82035808f"
+    },
+    {
+      "press_number": 10,
+      "file": "0789123456/10-6.mp3",
+      "actual_key": "6",
+      "predicted_key": "9",
+      "correct": false,
+      "top3_correct": true,
+      "ranked_keys": [
+        {
+          "key": "9",
+          "score": 9.274737442863563
+        },
+        {
+          "key": "6",
+          "score": 8.263985296611411
+        },
+        {
+          "key": "8",
+          "score": 6.224522571651942
+        }
+      ],
+      "sha256": "a497b8ad2f48a6c6d9b7ac06f7e2d22fa980246014bca2d700746c5b330d82e2"
+    }
+  ],
+  "training_test_sources_disjoint": true
+}

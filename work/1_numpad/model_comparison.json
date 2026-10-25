@@ -1,0 +1,210 @@
+{
+  "schema_version": 1,
+  "training_search": {
+    "feature_profiles": [
+      {
+        "name": "legacy_mfcc20",
+        "config": {
+          "mode": "mfcc_stats",
+          "sample_rate": 24000,
+          "duration_seconds": 0.32,
+          "pre_peak_seconds": 0.04,
+          "n_fft": 512,
+          "hop_length": 128,
+          "n_mels": 64,
+          "n_mfcc": 20,
+          "fmin": 100.0,
+          "fmax": 11000.0,
+          "db_floor": -80.0,
+          "patch_frames": 32,
+          "temporal_segments": 4,
+          "energy_weight_power": 1.0
+        }
+      },
+      {
+        "name": "weighted_mfcc20",
+        "config": {
+          "mode": "mfcc_weighted",
+          "sample_rate": 24000,
+          "duration_seconds": 0.32,
+          "pre_peak_seconds": 0.04,
+          "n_fft": 512,
+          "hop_length": 128,
+          "n_mels": 64,
+          "n_mfcc": 20,
+          "fmin": 100.0,
+          "fmax": 11000.0,
+          "db_floor": -80.0,
+          "patch_frames": 32,
+          "temporal_segments": 4,
+          "energy_weight_power": 1.0
+        }
+      },
+      {
+        "name": "weighted_mfcc30",
+        "config": {
+          "mode": "mfcc_weighted",
+          "sample_rate": 24000,
+          "duration_seconds": 0.32,
+          "pre_peak_seconds": 0.04,
+          "n_fft": 512,
+          "hop_length": 128,
+          "n_mels": 64,
+          "n_mfcc": 30,
+          "fmin": 100.0,
+          "fmax": 11000.0,
+          "db_floor": -80.0,
+          "patch_frames": 32,
+          "temporal_segments": 4,
+          "energy_weight_power": 1.0
+        }
+      },
+      {
+        "name": "weighted_mfcc30_sqrt",
+        "config": {
+          "mode": "mfcc_weighted",
+          "sample_rate": 24000,
+          "duration_seconds": 0.32,
+          "pre_peak_seconds": 0.04,
+          "n_fft": 512,
+          "hop_length": 128,
+          "n_mels": 64,
+          "n_mfcc": 30,
+          "fmin": 100.0,
+          "fmax": 11000.0,
+          "db_floor": -80.0,
+          "patch_frames": 32,
+          "temporal_segments": 4,
+          "energy_weight_power": 0.5
+        }
+      },
+      {
+        "name": "weighted_mfcc40_sqrt",
+        "config": {
+          "mode": "mfcc_weighted",
+          "sample_rate": 24000,
+          "duration_seconds": 0.32,
+          "pre_peak_seconds": 0.04,
+          "n_fft": 512,
+          "hop_length": 128,
+          "n_mels": 64,
+          "n_mfcc": 40,
+          "fmin": 100.0,
+          "fmax": 11000.0,
+          "db_floor": -80.0,
+          "patch_frames": 32,
+          "temporal_segments": 4,
+          "energy_weight_power": 0.5
+        }
+      },
+      {
+        "name": "short_mfcc30",
+        "config": {
+          "mode": "mfcc_stats",
+          "sample_rate": 24000,
+          "duration_seconds": 0.096,
+          "pre_peak_seconds": 0.008,
+          "n_fft": 512,
+          "hop_length": 64,
+          "n_mels": 64,
+          "n_mfcc": 30,
+          "fmin": 100.0,
+          "fmax": 11000.0,
+          "db_floor": -80.0,
+          "patch_frames": 32,
+          "temporal_segments": 4,
+          "energy_weight_power": 1.0
+        }
+      }
+    ],
+    "candidate_count": 72,
+    "partition_fold_counts": [
+      3,
+      4,
+      5
+    ],
+    "fold_count": 12,
+    "validation_prediction_count": 570,
+    "unique_validation_clip_count": 190,
+    "prediction_count_note": "Each development clip is evaluated once per partition. The repeated prediction denominator is not a count of independent audio clips.",
+    "random_seed": 42,
+    "shuffle": false,
+    "threadpool_limit": 1,
+    "external_test_data_used": false
+  },
+  "selection_rule": "Highest pooled repeated development CV accuracy, then highest worst-fold accuracy, then fewer features; remaining ties prefer linear, LDA, RBF, lower C, the default gamma, and stable profile order.",
+  "benchmark_note": "These are previously observed benchmarks, not fresh untouched tests. All new feature/model selection used development clips only.",
+  "external_recording_used_for_fitting_or_candidate_selection": false,
+  "baseline": {
+    "model": "work/1_numpad/runs/baseline/keypress_model.joblib",
+    "model_sha256": "fd50f8d6bb50ecf4b750967a169528f6c1e4205ecc892a903dbe8d78eace1315",
+    "repeated_development_accuracy": 0.8929824561403509,
+    "chronological_accuracy": 0.9215686274509803,
+    "chronological_correct": 47,
+    "external_accuracy": 0.5,
+    "external_correct": 5,
+    "external_top3_accuracy": 0.9,
+    "predicted_sequence": "0899113159"
+  },
+  "improved": {
+    "model": "work/1_numpad/keypress_model.joblib",
+    "model_sha256": "45eddb7e385f7f31cc51b0d5b91a75351b1165bbf7105d10cad7a1d88980de4e",
+    "feature_config": {
+      "mode": "mfcc_weighted",
+      "sample_rate": 24000,
+      "duration_seconds": 0.32,
+      "pre_peak_seconds": 0.04,
+      "n_fft": 512,
+      "hop_length": 128,
+      "n_mels": 64,
+      "n_mfcc": 40,
+      "fmin": 100.0,
+      "fmax": 11000.0,
+      "db_floor": -80.0,
+      "patch_frames": 32,
+      "temporal_segments": 4,
+      "energy_weight_power": 0.5
+    },
+    "classifier": {
+      "kind": "lda",
+      "shrinkage": "auto"
+    },
+    "repeated_development_accuracy": 0.9964912280701754,
+    "repeated_development_correct": 568,
+    "chronological_accuracy": 0.9803921568627451,
+    "chronological_correct": 50,
+    "external_accuracy": 0.8,
+    "external_correct": 8,
+    "external_top3_accuracy": 1.0,
+    "predicted_sequence": "0789113455"
+  },
+  "sample_counts": {
+    "development_unique": 190,
+    "development_repeated_predictions": 570,
+    "chronological": 51,
+    "external": 10,
+    "deployment_fit": 251
+  },
+  "expected_sequence": "0789123456",
+  "remaining_errors": [
+    {
+      "press_number": 6,
+      "actual_key": "2",
+      "predicted_key": "1"
+    },
+    {
+      "press_number": 10,
+      "actual_key": "6",
+      "predicted_key": "5"
+    }
+  ],
+  "external_report": "work/1_numpad/test_results/model-45eddb7e385f7f31/data-59cd22ae0eb61b6d",
+  "limitations": [
+    "Each key has one source recording. Recording identity is confounded with the key label.",
+    "Chronological held-out clips measure later presses within the same recordings; they do not measure generalization to a new recording session, phone, keyboard, or environment.",
+    "The final keypress_model.joblib is refitted on all clips, including the evaluation holdout. Use evaluation_model.joblib to reproduce held-out predictions.",
+    "Classifier decision scores are ranking scores, not calibrated probabilities.",
+    "Repeated CV reuses development clips across three partitions. Its prediction count is not a count of independent recordings or unique clips.",
+    "One external sequence supplies only one example per key; additional recording sessions are needed to assess reliability."
+  ]
+}

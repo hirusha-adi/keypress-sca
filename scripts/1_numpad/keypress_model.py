@@ -13,10 +13,11 @@ import subprocess
 import joblib
 import numpy as np
 from scipy.fft import dct, rfft
-from scipy.signal import find_peaks, get_window, resample
+from scipy.signal import find_peaks, get_window, resample, resample_poly
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
-from sklearn.svm import SVC
+from sklearn.svm import LinearSVC, SVC
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -24,7 +25,10 @@ DEFAULT_DATASET = ROOT / "datasets" / "1_numpad"
 DEFAULT_WORK = ROOT / "work" / "1_numpad"
 DEFAULT_MODEL = DEFAULT_WORK / "keypress_model.joblib"
 MODEL_SCHEMA_VERSION = 1
-FEATURE_MODES = ("mfcc_stats", "logmel_stats", "logmel_patch", "logmel_temporal")
+FEATURE_MODES = (
+    "mfcc_stats", "logmel_stats", "logmel_patch", "logmel_temporal",
+    "mfcc_weighted", "logmel_weighted",
+)
 MAX_AUDIO_SECONDS = 30
 
 
@@ -43,6 +47,7 @@ class FeatureConfig:
     db_floor: float = -80.0
     patch_frames: int = 32
     temporal_segments: int = 4
+    energy_weight_power: float = 1.0
 
     def __post_init__(self) -> None:
         if self.mode not in FEATURE_MODES:
@@ -58,6 +63,8 @@ class FeatureConfig:
         frame_count = 1 + (round(self.duration_seconds * self.sample_rate) - self.n_fft) // self.hop_length
         if not (1 <= self.temporal_segments <= frame_count) or self.patch_frames < 1:
             raise ValueError("Invalid temporal feature dimensions")
+        if not math.isfinite(self.energy_weight_power) or self.energy_weight_power <= 0:
+            raise ValueError("Energy weighting power must be positive and finite")
 
 
 def decode_audio(path: Path, sample_rate: int) -> np.ndarray:
@@ -150,6 +157,16 @@ def logmel_spectrogram(waveform: np.ndarray, config: FeatureConfig) -> np.ndarra
 def representations(logmel: np.ndarray, config: FeatureConfig) -> dict[str, np.ndarray]:
     coefficients = dct(logmel, type=2, axis=0, norm="ortho")[:config.n_mfcc]
     chunks = np.array_split(logmel, config.temporal_segments, axis=1)
+    # Relative mel power is sufficient: a common gain cancels when normalizing
+    # these weights. Quiet tails contribute very little to the event statistics.
+    weights = np.sum(10 ** (logmel / 10), axis=0) ** config.energy_weight_power
+    weights /= weights.sum()
+
+    def weighted_stats(values: np.ndarray) -> np.ndarray:
+        mean = values @ weights
+        variance = ((values - mean[:, None]) ** 2) @ weights
+        return np.r_[mean, np.sqrt(np.maximum(variance, 0))]
+
     variants = {
         "mfcc_stats": np.r_[coefficients.mean(axis=1), coefficients.std(axis=1)],
         "logmel_stats": np.r_[logmel.mean(axis=1), logmel.std(axis=1)],
@@ -157,6 +174,8 @@ def representations(logmel: np.ndarray, config: FeatureConfig) -> dict[str, np.n
         "logmel_temporal": np.concatenate(
             [chunk.mean(axis=1) for chunk in chunks] + [logmel.std(axis=1)]
         ),
+        "mfcc_weighted": weighted_stats(coefficients),
+        "logmel_weighted": weighted_stats(logmel),
     }
     if any(not np.isfinite(values).all() for values in variants.values()):
         raise ValueError("Audio feature extraction produced non-finite values")
@@ -177,12 +196,23 @@ def extract_features(path: Path, config: FeatureConfig = FeatureConfig()) -> np.
     return feature_variants(path, config)[config.mode]
 
 
-def build_classifier(c: float = 10.0):
+def build_classifier(
+    c: float = 10.0,
+    *,
+    kind: str = "rbf",
+    gamma: str | float = "scale",
+    shrinkage: str | float = 0.5,
+):
     # The scaler is fit only on each training fold, never on validation examples.
-    return make_pipeline(
-        StandardScaler(),
-        SVC(C=c, kernel="rbf", gamma="scale", decision_function_shape="ovr", break_ties=True),
-    )
+    if kind == "rbf":
+        estimator = SVC(C=c, kernel="rbf", gamma=gamma, decision_function_shape="ovr", break_ties=True)
+    elif kind == "linear":
+        estimator = LinearSVC(C=c, dual="auto", max_iter=20000, random_state=42)
+    elif kind == "lda":
+        estimator = LinearDiscriminantAnalysis(solver="lsqr", shrinkage=shrinkage)
+    else:
+        raise ValueError(f"Unknown classifier kind: {kind}")
+    return make_pipeline(StandardScaler(), estimator)
 
 
 def load_model(path: Path = DEFAULT_MODEL) -> dict:
@@ -205,21 +235,59 @@ def load_model(path: Path = DEFAULT_MODEL) -> dict:
     return artifact
 
 
-def predict_key(path: Path, artifact: dict, top_k: int = 3) -> dict:
+def predict_waveform(
+    waveform: np.ndarray,
+    artifact: dict,
+    top_k: int = 3,
+    *,
+    sample_rate: int | None = None,
+) -> dict:
+    """Classify an in-memory mono event; resample the complete event if needed.
+
+    Confidence is the estimator's uncalibrated probability when available. It
+    is not measured accuracy. Estimators without probabilities return None.
+    """
     if not (1 <= top_k <= 10):
         raise ValueError("top_k must be between 1 and 10")
     config = FeatureConfig(**artifact["feature_config"])
-    features = extract_features(Path(path), config).reshape(1, -1)
+    waveform = np.asarray(waveform, dtype=np.float64)
+    if waveform.ndim != 1 or not np.isfinite(waveform).all():
+        raise ValueError("Expected finite, one-dimensional mono audio")
+    if sample_rate is not None:
+        if not isinstance(sample_rate, (int, np.integer)) or sample_rate <= 0:
+            raise ValueError("sample_rate must be a positive integer")
+        if sample_rate != config.sample_rate:
+            divisor = math.gcd(int(sample_rate), config.sample_rate)
+            waveform = resample_poly(waveform, config.sample_rate // divisor, int(sample_rate) // divisor)
+    features = feature_variants_from_waveform(waveform, config)[config.mode].reshape(1, -1)
     pipeline = artifact["pipeline"]
     scores = np.asarray(pipeline.decision_function(features))[0]
     classes = [str(key) for key in pipeline.classes_]
     order = np.argsort(-scores, kind="stable")
+    predicted = str(pipeline.predict(features)[0])
+    probabilities = None
+    probability_method = getattr(pipeline, "predict_proba", None)
+    if probability_method is not None:
+        probabilities = np.asarray(probability_method(features))[0]
+        if (probabilities.shape != scores.shape or not np.isfinite(probabilities).all()
+                or np.any(probabilities < 0) or np.any(probabilities > 1)
+                or not np.isclose(probabilities.sum(), 1)):
+            raise ValueError("Classifier returned invalid probability estimates")
     return {
-        "audio_file": str(Path(path).resolve()),
-        "predicted_key": str(pipeline.predict(features)[0]),
+        "predicted_key": predicted,
         "ranked_keys": [
-            {"key": classes[index], "score": float(scores[index])}
+            {"key": classes[index], "score": float(scores[index]),
+             "probability": float(probabilities[index]) if probabilities is not None else None}
             for index in order[:top_k]
         ],
-        "score_type": "SVM decision score; not a probability",
+        "confidence": float(probabilities[classes.index(predicted)]) if probabilities is not None else None,
+        "confidence_type": "uncalibrated_model_probability" if probabilities is not None else "unavailable",
+        "margin": float(scores[order[0]] - scores[order[1]]),
+        "score_type": "Uncalibrated classifier decision score; not a probability",
     }
+
+
+def predict_key(path: Path, artifact: dict, top_k: int = 3) -> dict:
+    config = FeatureConfig(**artifact["feature_config"])
+    result = predict_waveform(decode_audio(path, config.sample_rate), artifact, top_k)
+    return {"audio_file": str(Path(path).resolve()), **result}

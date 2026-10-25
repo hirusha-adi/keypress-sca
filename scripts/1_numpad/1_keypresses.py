@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Split datasets/1_numpad/{0..9}.m4a into {key}/{1..N}.mp3.
+"""Split numpad training recordings and digit-sequence test recordings.
 
 Run with --dry-run to inspect detections without writing anything. See the
 README in this directory for dependencies, safeguards, and output details.
@@ -13,6 +13,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -23,6 +24,7 @@ from scipy.signal import find_peaks
 
 
 DEFAULT_DATASET = Path(__file__).resolve().parents[2] / "datasets" / "1_numpad"
+DEFAULT_TESTS = Path(__file__).resolve().parents[2] / "datasets" / "1_tests"
 FRAME_SECONDS = 0.005
 MIN_PRESS_INTERVAL_SECONDS = 0.350
 QUIET_SECONDS = 0.050
@@ -43,10 +45,27 @@ class Recording:
     threshold: float
     noise_floor: float
     quiet_threshold: float
+    sequence: str | None = None
 
     @property
     def channels(self) -> int:
         return self.samples.shape[1]
+
+    @property
+    def clip_names(self) -> list[str]:
+        if self.sequence is not None:
+            names = sequence_clip_names(self.sequence)
+            if len(names) != len(self.peaks):
+                raise ValueError("Sequence labels do not match the detected press count")
+            return names
+        return [f"{index}.mp3" for index in range(1, len(self.peaks) + 1)]
+
+
+def sequence_clip_names(sequence: str) -> list[str]:
+    """Name clips by one-based press number followed by the actual key."""
+    if not sequence or not sequence.isascii() or not sequence.isdecimal():
+        raise ValueError("Test recording filenames must contain only digits 0-9, in press order")
+    return [f"{index}-{key}.mp3" for index, key in enumerate(sequence, 1)]
 
 
 def run_audio_tool(command: list[str], **kwargs) -> bytes:
@@ -172,8 +191,29 @@ def analyze(
                      threshold, noise_floor, quiet_threshold)
 
 
+def analyze_sequence(
+    path: Path,
+    samples: np.ndarray,
+    sample_rate: int,
+    threshold_db: float | None = None,
+) -> Recording:
+    names = sequence_clip_names(path.stem)
+    recording = analyze(path, samples, sample_rate, {len(names)}, threshold_db)
+    recording.sequence = path.stem
+    return recording
+
+
 def numbered_mp3s(directory: Path) -> list[Path]:
     return [path for path in directory.glob("*.mp3") if path.stem.isdecimal()]
+
+
+def generated_mp3s(directory: Path, recording: Recording) -> list[Path]:
+    if recording.sequence is None:
+        return numbered_mp3s(directory)
+    # Recognize the former key-occurrence format too, so --overwrite removes
+    # obsolete files when regenerating a sequence with the corrected naming.
+    return [path for path in directory.glob("*.mp3")
+            if path.is_file() and re.fullmatch(r"(?:[1-9][0-9]*-[0-9]|[0-9]-[1-9][0-9]*)", path.stem)]
 
 
 def check_outputs(dataset: Path, recordings: list[Recording], overwrite: bool) -> None:
@@ -184,10 +224,10 @@ def check_outputs(dataset: Path, recordings: list[Recording], overwrite: bool) -
         directory = dataset / recording.path.stem
         if directory.exists() and not directory.is_dir():
             raise ValueError(f"{directory} exists and is not a directory")
-        if numbered_mp3s(directory) and not overwrite:
+        if generated_mp3s(directory, recording) and not overwrite:
             raise ValueError(f"{directory} already contains clips; use --overwrite to replace them")
-        for index in range(1, len(recording.peaks) + 1):
-            target = directory / f"{index}.mp3"
+        for name in recording.clip_names:
+            target = directory / name
             if target.exists() and not target.is_file():
                 raise ValueError(f"{target} exists and is not a file")
 
@@ -216,10 +256,10 @@ def export(dataset: Path, recordings: list[Recording], gain: float, overwrite: b
             directory = staging / recording.path.stem
             directory.mkdir()
             clips = []
-            for index, (start, end, peak) in enumerate(
-                zip(recording.cuts[:-1], recording.cuts[1:], recording.peaks), 1
+            for index, (start, end, peak, name) in enumerate(
+                zip(recording.cuts[:-1], recording.cuts[1:], recording.peaks, recording.clip_names), 1
             ):
-                target = directory / f"{index}.mp3"
+                target = directory / name
                 pcm = (recording.samples[start:end] * gain).astype("<f4").tobytes()
                 run_audio_tool([
                     "ffmpeg", "-v", "error", "-nostdin", "-f", "f32le",
@@ -228,7 +268,9 @@ def export(dataset: Path, recordings: list[Recording], gain: float, overwrite: b
                     "-q:a", "0", str(target),
                 ], input=pcm)
                 clips.append({
-                    "file": f"{recording.path.stem}/{index}.mp3",
+                    "file": f"{recording.path.stem}/{name}",
+                    "press_number": index,
+                    **({"key": recording.sequence[index - 1]} if recording.sequence is not None else {}),
                     "start_sample": start,
                     "end_sample_exclusive": end,
                     "start_seconds": start / recording.sample_rate,
@@ -237,6 +279,7 @@ def export(dataset: Path, recordings: list[Recording], gain: float, overwrite: b
                 })
             manifest["recordings"].append({
                 "source": recording.path.name,
+                **({"key_sequence": recording.sequence} if recording.sequence is not None else {}),
                 "source_sha256": hashlib.sha256(recording.path.read_bytes()).hexdigest(),
                 "sample_rate": recording.sample_rate,
                 "channels": recording.channels,
@@ -257,7 +300,7 @@ def export(dataset: Path, recordings: list[Recording], gain: float, overwrite: b
             for path in staged_files:
                 path.replace(destination / path.name)
             if overwrite:
-                for stale in numbered_mp3s(destination):
+                for stale in generated_mp3s(destination, recording):
                     if stale.name not in names:
                         stale.unlink()
         (staging / REPORT_NAME).replace(dataset / REPORT_NAME)
@@ -267,10 +310,14 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset-dir", type=Path, default=DEFAULT_DATASET,
                         help="directory containing 0.m4a through 9.m4a (default: repository datasets/1_numpad)")
+    parser.add_argument("--tests-dir", type=Path, default=DEFAULT_TESTS,
+                        help="directory of digit-sequence M4As (default: repository datasets/1_tests)")
+    parser.add_argument("--only", choices=("all", "training", "tests"), default="all",
+                        help="which recordings to process (default: all); tests avoids rewriting training clips")
     parser.add_argument("--dry-run", action="store_true", help="analyze and validate without writing files")
-    parser.add_argument("--overwrite", action="store_true", help="replace numbered MP3s and remove stale numbered clips")
+    parser.add_argument("--overwrite", action="store_true", help="replace generated MP3s and remove stale generated clips")
     parser.add_argument("--expected-counts", nargs="+", type=int, default=[25, 26],
-                        help="allowed press counts; validation only, never forces detections (default: 25 26)")
+                        help="allowed training counts; tests must match their filename length (default: 25 26)")
     parser.add_argument("--threshold-db", type=float, help="override the adaptive RMS detection threshold in dBFS")
     args = parser.parse_args(argv)
     if any(count < 1 for count in args.expected_counts):
@@ -280,33 +327,56 @@ def main(argv: list[str] | None = None) -> int:
     for tool in ("ffmpeg", "ffprobe"):
         if shutil.which(tool) is None:
             parser.error(f"{tool} is required on PATH")
-    dataset = args.dataset_dir.resolve()
-    sources = [dataset / f"{key}.m4a" for key in range(10)]
-    missing = [path.name for path in sources if not path.is_file()]
-    if missing:
-        parser.error(f"missing recordings in {dataset}: {', '.join(missing)}")
+    groups = []
+    if args.only != "tests":
+        dataset = args.dataset_dir.resolve()
+        sources = [dataset / f"{key}.m4a" for key in range(10)]
+        missing = [path.name for path in sources if not path.is_file()]
+        if missing:
+            parser.error(f"missing recordings in {dataset}: {', '.join(missing)}")
+        groups.append((dataset, sources, False))
+    if args.only != "training":
+        tests = args.tests_dir.resolve()
+        sources = sorted(tests.glob("*.m4a"))
+        if not sources:
+            if args.only == "tests":
+                parser.error(f"no .m4a test recordings in {tests}")
+            print(f"No test recordings in {tests}; processing training recordings only.")
+        else:
+            groups.append((tests, sources, True))
     try:
-        recordings = []
-        for path in sources:
-            samples, sample_rate = decode(path)
-            recording = analyze(path, samples, sample_rate, set(args.expected_counts), args.threshold_db)
-            recordings.append(recording)
-            print(
-                f"{path.name}: {len(recording.peaks)} presses, "
-                f"{len(samples) / sample_rate:.3f}s, {sample_rate} Hz, {recording.channels} channels, "
-                f"threshold {20 * math.log10(recording.threshold):.1f} dBFS", flush=True,
-            )
-        # AAC decoding can yield samples above full scale. One shared attenuation
-        # preserves relative levels across all keys and leaves MP3 encoding headroom.
-        maximum_peak = max(float(np.max(np.abs(recording.samples))) for recording in recordings)
-        gain = min(1.0, 0.90 / max(maximum_peak, 1e-10))
-        total = sum(len(recording.peaks) for recording in recordings)
-        print(f"Validated {total} clips; shared output gain {20 * math.log10(gain):.2f} dB", flush=True)
+        jobs = []
+        # Validate all selected recordings before writing any outputs.
+        for dataset, sources, is_test in groups:
+            recordings = []
+            for path in sources:
+                if is_test:
+                    sequence_clip_names(path.stem)
+                samples, sample_rate = decode(path)
+                if is_test:
+                    recording = analyze_sequence(path, samples, sample_rate, args.threshold_db)
+                else:
+                    recording = analyze(path, samples, sample_rate, set(args.expected_counts), args.threshold_db)
+                recordings.append(recording)
+                print(
+                    f"{path.name}: {len(recording.peaks)} presses, "
+                    f"{len(samples) / sample_rate:.3f}s, {sample_rate} Hz, {recording.channels} channels, "
+                    f"threshold {20 * math.log10(recording.threshold):.1f} dBFS", flush=True,
+                )
+            # Keep training gain independent of any new test recordings.
+            maximum_peak = max(float(np.max(np.abs(recording.samples))) for recording in recordings)
+            gain = min(1.0, 0.90 / max(maximum_peak, 1e-10))
+            total = sum(len(recording.peaks) for recording in recordings)
+            print(f"{dataset.name}: validated {total} clips; shared output gain {20 * math.log10(gain):.2f} dB", flush=True)
+            jobs.append((dataset, recordings, gain, total))
         if args.dry_run:
             print("Dry run: no files written.")
         else:
-            export(dataset, recordings, gain, args.overwrite)
-            print(f"Saved {total} MP3s and {dataset / REPORT_NAME}")
+            for dataset, recordings, gain, total in jobs:
+                check_outputs(dataset, recordings, args.overwrite)
+            for dataset, recordings, gain, total in jobs:
+                export(dataset, recordings, gain, args.overwrite)
+                print(f"Saved {total} MP3s and {dataset / REPORT_NAME}")
     except (ValueError, OSError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1

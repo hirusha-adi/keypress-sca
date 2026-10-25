@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "description": "One press + release per clip; contiguous sample ranges cover each recording completely.",
+  "encoder": "libmp3lame -q:a 0",
+  "gain": 0.666978334139771,
+  "gain_db": -3.517765466087806,
+  "analysis": {
+    "frame_seconds": 0.005,
+    "min_press_interval_seconds": 0.35,
+    "quiet_window_seconds": 0.05,
+    "after_press_guard_seconds": 0.2,
+    "before_press_guard_seconds": 0.1
+  },
+  "recordings": [
+    {
+      "source": "0789123456.m4a",
+      "key_sequence": "0789123456",
+      "source_sha256": "c642f463e6347a305c0bbb6788a0760683ae249e0be4aa9cd5f2ed4c482f52cc",
+      "sample_rate": 48000,
+      "channels": 2,
+      "decoded_samples": 505856,
+      "detected_presses": 10,
+      "noise_floor_rms": 0.00048613529418061504,
+      "detection_threshold_rms": 0.0386852629198904,
+      "quiet_threshold_rms": 0.005802789437983559,
+      "clips": [
+        {
+          "file": "0789123456/1-0.mp3",
+          "press_number": 1,
+          "key": "0",
+          "start_sample": 0,
+          "end_sample_exclusive": 71520,
+          "start_seconds": 0.0,
+          "end_seconds": 1.49,
+          "press_peak_sample": 41160
+        },
+        {
+          "file": "0789123456/2-7.mp3",
+          "press_number": 2,
+          "key": "7",
+          "start_sample": 71520,
+          "end_sample_exclusive": 123120,
+          "start_seconds": 1.49,
+          "end_seconds": 2.565,
+          "press_peak_sample": 102360
+        },
+        {
+          "file": "0789123456/3-8.mp3",
+          "press_number": 3,
+          "key": "8",
+          "start_sample": 123120,
+          "end_sample_exclusive": 162960,
+          "start_seconds": 2.565,
+          "end_seconds": 3.395,
+          "press_peak_sample": 144120
+        },
+        {
+          "file": "0789123456/4-9.mp3",
+          "press_number": 4,
+          "key": "9",
+          "start_sample": 162960,
+          "end_sample_exclusive": 213120,
+          "start_seconds": 3.395,
+          "end_seconds": 4.44,
+          "press_peak_sample": 182280
+        },
+        {
+          "file": "0789123456/5-1.mp3",
+          "press_number": 5,
+          "key": "1",
+          "start_sample": 213120,
+          "end_sample_exclusive": 266880,
+          "start_seconds": 4.44,
+          "end_seconds": 5.56,
+          "press_peak_sample": 244200
+        },
+        {
+          "file": "0789123456/6-2.mp3",
+          "press_number": 6,
+          "key": "2",
+          "start_sample": 266880,
+          "end_sample_exclusive": 308880,
+          "start_seconds": 5.56,
+          "end_seconds": 6.435,
+          "press_peak_sample": 290040
+        },
+        {
+          "file": "0789123456/7-3.mp3",
+          "press_number": 7,
+          "key": "3",
+          "start_sample": 308880,
+          "end_sample_exclusive": 356640,
+          "start_seconds": 6.435,
+          "end_seconds": 7.43,
+          "press_peak_sample": 327960
+        },
+        {
+          "file": "0789123456/8-4.mp3",
+          "press_number": 8,
+          "key": "4",
+          "start_sample": 356640,
+          "end_sample_exclusive": 406320,
+          "start_seconds": 7.43,
+          "end_seconds": 8.465,
+          "press_peak_sample": 385560
+        },
+        {
+          "file": "0789123456/9-5.mp3",
+          "press_number": 9,
+          "key": "5",
+          "start_sample": 406320,
+          "end_sample_exclusive": 446880,
+          "start_seconds": 8.465,
+          "end_seconds": 9.31,
+          "press_peak_sample": 427320
+        },
+        {
+          "file": "0789123456/10-6.mp3",
+          "press_number": 10,
+          "key": "6",
+          "start_sample": 446880,
+          "end_sample_exclusive": 505856,
+          "start_seconds": 9.31,
+          "end_seconds": 10.538666666666666,
+          "press_peak_sample": 466680
+        }
+      ]
+    }
+  ]
+}

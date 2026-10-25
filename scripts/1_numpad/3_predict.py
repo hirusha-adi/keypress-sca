@@ -29,7 +29,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(result, indent=2))
     else:
         print(f"Predicted key: {result['predicted_key']}")
-        print("Ranked SVM scores (not probabilities):")
+        print("Ranked classifier scores (not probabilities):")
         for entry in result["ranked_keys"]:
             print(f"  {entry['key']}: {entry['score']:.3f}")
     return 0

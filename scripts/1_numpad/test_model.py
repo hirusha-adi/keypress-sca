@@ -1,6 +1,7 @@
 """Feature and inference checks independent of classifier training accuracy."""
 
 from dataclasses import asdict
+import io
 from pathlib import Path
 import tempfile
 import unittest
@@ -42,12 +43,35 @@ class FeatureTests(unittest.TestCase):
             "logmel_stats": 128,
             "logmel_patch": 2048,
             "logmel_temporal": 320,
+            "mfcc_weighted": 40,
+            "logmel_weighted": 128,
         }
         self.assertEqual(set(features), set(expected))
         for mode, size in expected.items():
             with self.subTest(mode=mode):
                 self.assertEqual(features[mode].shape, (size,))
                 self.assertTrue(np.isfinite(features[mode]).all())
+
+    def test_energy_weighting_reduces_background_influence(self):
+        original = model.feature_variants_from_waveform(self.waveform, self.config)
+        rng = np.random.default_rng(149)
+        with_background = self.waveform + rng.normal(0, 0.0001, len(self.waveform))
+        noisy = model.feature_variants_from_waveform(with_background, self.config)
+        plain_change = np.linalg.norm(noisy["mfcc_stats"] - original["mfcc_stats"])
+        weighted_change = np.linalg.norm(noisy["mfcc_weighted"] - original["mfcc_weighted"])
+        self.assertLess(weighted_change, plain_change * 0.2)
+
+    def test_weighted_thirty_mfcc_configuration_and_legacy_defaults(self):
+        config = model.FeatureConfig(mode="mfcc_weighted", n_mfcc=30)
+        variants = model.feature_variants_from_waveform(self.waveform, config)
+        self.assertEqual(variants[config.mode].shape, (60,))
+        legacy = asdict(self.config)
+        legacy.pop("energy_weight_power")
+        restored = model.FeatureConfig(**legacy)
+        np.testing.assert_array_equal(
+            model.feature_variants_from_waveform(self.waveform, restored)["mfcc_stats"],
+            model.feature_variants_from_waveform(self.waveform, self.config)["mfcc_stats"],
+        )
 
     def test_leading_quiet_and_recording_gain_do_not_change_features(self):
         original = model.feature_variants_from_waveform(self.waveform, self.config)
@@ -90,6 +114,68 @@ class FeatureTests(unittest.TestCase):
 
 
 class ModelPersistenceTests(unittest.TestCase):
+    def test_waveform_prediction_reports_native_probabilities_separately_from_accuracy(self):
+        config = model.FeatureConfig()
+        rng = np.random.default_rng(59)
+        features = rng.normal(size=(60, 40))
+        labels = np.repeat([str(key) for key in range(10)], 6)
+        waveform = synthetic_press()
+        probe = model.feature_variants_from_waveform(waveform, config)[config.mode].reshape(1, -1)
+        for kind in ("lda", "rbf", "linear"):
+            with self.subTest(kind=kind):
+                pipeline = model.build_classifier(0.01, kind=kind)
+                pipeline.fit(features, labels)
+                artifact = {"pipeline": pipeline, "feature_config": asdict(config)}
+                result = model.predict_waveform(waveform, artifact)
+                self.assertNotIn("accuracy", result)
+                self.assertEqual(result["predicted_key"], pipeline.predict(probe)[0])
+                if kind == "lda":
+                    index = list(pipeline.classes_).index(result["predicted_key"])
+                    self.assertAlmostEqual(result["confidence"], pipeline.predict_proba(probe)[0, index])
+                    self.assertEqual(result["confidence_type"], "uncalibrated_model_probability")
+                else:
+                    self.assertIsNone(result["confidence"])
+                    self.assertEqual(result["confidence_type"], "unavailable")
+                    self.assertTrue(all(row["probability"] is None for row in result["ranked_keys"]))
+
+    def test_file_and_native_rate_waveform_prediction_share_the_same_model(self):
+        config = model.FeatureConfig()
+        rng = np.random.default_rng(61)
+        pipeline = model.build_classifier(0.01, kind="lda")
+        pipeline.fit(rng.normal(size=(60, 40)), np.repeat([str(key) for key in range(10)], 6))
+        artifact = {"pipeline": pipeline, "feature_config": asdict(config)}
+        waveform = synthetic_press().astype(np.float32)
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "press.wav"
+            wavfile.write(path, config.sample_rate, waveform)
+            from_file = model.predict_key(path, artifact)
+        from_memory = model.predict_waveform(waveform, artifact, sample_rate=config.sample_rate)
+        self.assertEqual(from_file["predicted_key"], from_memory["predicted_key"])
+        self.assertEqual(from_file["ranked_keys"], from_memory["ranked_keys"])
+        self.assertEqual(from_file["confidence"], from_memory["confidence"])
+
+    def test_classifier_families_preserve_decision_scores_after_reload(self):
+        rng = np.random.default_rng(29)
+        features = rng.normal(size=(60, 24))
+        labels = np.repeat([str(key) for key in range(10)], 6)
+        probes = rng.normal(size=(4, 24))
+        for kind in ("rbf", "linear", "lda"):
+            with self.subTest(kind=kind):
+                pipeline = model.build_classifier(0.01, kind=kind)
+                pipeline.fit(features, labels)
+                scores = pipeline.decision_function(probes)
+                self.assertEqual(scores.shape, (4, 10))
+                self.assertTrue(np.isfinite(scores).all())
+                np.testing.assert_array_equal(
+                    pipeline.predict(probes), pipeline.classes_[np.argmax(scores, axis=1)]
+                )
+                stream = io.BytesIO()
+                joblib.dump(pipeline, stream)
+                stream.seek(0)
+                restored = joblib.load(stream)
+                np.testing.assert_allclose(restored.decision_function(probes), scores)
+                np.testing.assert_array_equal(restored.predict(probes), pipeline.predict(probes))
+
     def test_saved_configuration_and_prediction_survive_serialization(self):
         # Arbitrary feature vectors test persistence and inference plumbing only;
         # they make no claim about acoustic classification accuracy.
