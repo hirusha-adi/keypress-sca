@@ -204,9 +204,8 @@ python -m unittest discover -s scripts/2_numpad -p 'test_*.py' -v
 
 Run each suite separately because the experiment folders contain modules with the same names. Tests use synthetic audio and temporary artifacts; they do not need a microphone or the full trained model. Neural tests run when optional PyTorch dependencies are installed.
 
-## Prior work and acknowledgement
+## Prior work
 
 Acoustic keyboard inference predates this project by decades. Relevant examples include [Asonov and Agrawal (2004)](https://research.ibm.com/publications/keyboard-acoustic-emanations), [Zhuang et al. (2005)](https://people.eecs.berkeley.edu/~tygar/papers/Keyboard_Acoustic_Emanations_Revisited/preprint.pdf), [Harrison et al. (2023)](https://arxiv.org/abs/2308.01074), and [Ayati et al. (2025)](https://www.usenix.org/conference/woot25/presentation/ayati). The [reading list](docs/related-work.md) explains their relevance and includes later work on generalization.
 
 This repository documents my own small implementation and experiments. Its scores use different data and evaluation conditions from those papers, so they should not be treated as a direct comparison or an advance over their results.
-
