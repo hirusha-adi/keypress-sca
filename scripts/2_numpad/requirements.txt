@@ -1,0 +1,7 @@
+numpy
+scipy
+matplotlib
+scikit-learn>=1.5,<2
+joblib>=1.4,<2
+threadpoolctl>=3
+sounddevice>=0.5,<0.6

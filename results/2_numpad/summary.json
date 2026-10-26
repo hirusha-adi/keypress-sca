@@ -1,0 +1,121 @@
+{
+  "backend": "neural_spectral_hybrid",
+  "classes": [
+    "0",
+    "1",
+    "2",
+    "3"
+  ],
+  "training_sample_count": 706,
+  "withheld_sample_count": 0,
+  "parameter_count": 141792184,
+  "model_sha256": "0465bf80e992819c1decdcf15df245894850cdcb2066ab945fb130317dca0c12",
+  "benchmark_used_for_development": true,
+  "separate_test": {
+    "correct": 20,
+    "sample_count": 20,
+    "accuracy": 1.0,
+    "top3_correct": 20,
+    "top3_accuracy": 1.0
+  },
+  "dataset": "2_numpad",
+  "model": "work/2_numpad/keypress_model.joblib",
+  "expected_test_sequence": "02310231023102310231",
+  "predicted_test_sequence": "02310231023102310231",
+  "test_per_key": {
+    "0": {
+      "correct": 5,
+      "total": 5,
+      "accuracy": 1.0
+    },
+    "1": {
+      "correct": 5,
+      "total": 5,
+      "accuracy": 1.0
+    },
+    "2": {
+      "correct": 5,
+      "total": 5,
+      "accuracy": 1.0
+    },
+    "3": {
+      "correct": 5,
+      "total": 5,
+      "accuracy": 1.0
+    }
+  },
+  "test_confusion_matrix": [
+    [
+      5,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      5,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      5,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      5
+    ]
+  ],
+  "test_errors": [],
+  "test_report_directory": "work/2_numpad/test_results/model-0465bf80e992819c/data-7b8871c5a3f1b097",
+  "images": [
+    "key_0_rms_peaks.png",
+    "key_1_rms_peaks.png",
+    "key_2_rms_peaks.png",
+    "key_3_rms_peaks.png",
+    "rms_peaks.png",
+    "test_confusion_matrix.png",
+    "test_rms_peaks.png",
+    "training_curves.png"
+  ],
+  "previous_model_archive": "runs/pre-deep-097d2509281d8bac",
+  "training_test_source_hashes_disjoint": true,
+  "training_test_clip_hashes_disjoint": true,
+  "streaming_replay": {
+    "events": 20,
+    "clean_events": 20,
+    "correct": 20,
+    "accuracy": 1.0,
+    "microphone_opened": false
+  },
+  "development_benchmark": {
+    "correct": 20,
+    "sample_count": 20,
+    "accuracy": 1.0,
+    "top3_correct": 20,
+    "top3_accuracy": 1.0
+  },
+  "fresh_live_accuracy": null,
+  "evaluation_note": "The existing 20-press recording guided architecture development. Its reported score is a development benchmark, not an independent estimate of live accuracy.",
+  "training_clips": 706,
+  "neural_epochs_per_member": 80,
+  "spectral_augmented_fit_rows_per_head": 2824,
+  "fusion": {
+    "spectral": 0.8,
+    "neural": 0.2
+  },
+  "baseline_benchmark": {
+    "correct": 18,
+    "sample_count": 20,
+    "accuracy": 0.9
+  },
+  "neural_only_benchmark": {
+    "correct": 15,
+    "sample_count": 20,
+    "accuracy": 0.75
+  }
+}

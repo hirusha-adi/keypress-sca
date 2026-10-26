@@ -1,6 +1,10 @@
-# Numpad audio: visualize, split, train, and predict
+# Dataset 1: phone recordings of numpad keys 0–9
 
-Install FFmpeg (including `ffprobe` and the `libmp3lame` encoder). The prepared Python environment is `.venv`; activate it with `source .venv/bin/activate`, or use `.venv/bin/python` directly. To set up another checkout:
+This is the first experiment: 251 training clips across ten numpad keys, recorded on a phone, with a separate ten-press sequence. It uses MFCC features and classic classifiers. I built it to play around with acoustic keystroke recognition; there is no novelty claim. [Dataset 2](../2_numpad/README.md) contains the later four-key microphone experiment.
+
+## Setup and quick start
+
+Install FFmpeg (including `ffprobe` and the `libmp3lame` encoder), Python 3.12, and PortAudio for microphone capture. From the repository root:
 
 ```bash
 python -m venv .venv
@@ -8,19 +12,20 @@ source .venv/bin/activate
 python -m pip install -r scripts/1_numpad/requirements-lock.txt
 ```
 
-Python 3.12 was used for the saved models. `requirements-lock.txt` records the exact dependency versions; `requirements.txt` lists direct dependencies. Use the locked versions when loading the saved models, or retrain after changing dependencies.
+Python 3.12 was used for the recorded experiments. `requirements-lock.txt` records exact dependency versions; `requirements.txt` lists direct dependencies. **Model weights are not included in Git.** Train locally before predicting or evaluating. New plots, models, and reports are written to the ignored `work/1_numpad/` directory; selected historical evidence is published under [`results/`](../../results/README.md).
 
 From the repository root, with the environment active:
 
 ```bash
 python scripts/1_numpad/0_visualize.py
 python scripts/1_numpad/1_keypresses.py --dry-run
-python scripts/1_numpad/1_keypresses.py
 python scripts/1_numpad/2_train.py
-python scripts/1_numpad/3_predict.py path/to/new_keypress.m4a
 python scripts/1_numpad/4_evaluate.py
+python scripts/1_numpad/3_predict.py datasets/1_tests/0789123456/1-0.mp3
 python scripts/1_numpad/5_live_predict.py
 ```
+
+Prepared split clips are included. The dry run checks them against the source recordings without rewriting files. To regenerate clips, use the splitter with `--overwrite` as described below. A replay can be used instead of microphone capture.
 
 ## Visualize recordings
 
@@ -30,9 +35,17 @@ The visualizer shares the splitter's detector and remains usable when a recordin
 
 Paths default to the repository's dataset and work directories, regardless of the current working directory. Use `--dataset-dir PATH`, `--output PATH.png`, or `--dpi 240` to change the input, image location, or resolution. Re-running the visualizer replaces its output image.
 
+![RMS envelopes, detected presses, and thresholds for the ten phone-recorded numpad keys](../../results/1_numpad/rms_peaks.png)
+
+The saved overview shows the 251 retained detections, with 26 for key 6 and 25 for each other key. Peak counts and quiet-gap checks help inspect segmentation; they do not measure classification accuracy.
+
 ## Split recordings
 
 By default the script processes both training recordings and any test recordings. It reads `datasets/1_numpad/0.m4a` through `9.m4a` and writes numbered training clips such as `datasets/1_numpad/0/1.mp3`. Use `--dataset-dir PATH` for a different training directory, `--only training` to process just training recordings, or `--overwrite` to regenerate existing clips. Overwriting also removes obsolete generated MP3s in the selected output folders.
+
+```bash
+python scripts/1_numpad/1_keypresses.py --overwrite
+```
 
 To split new test recordings without rewriting existing training clips:
 
@@ -64,7 +77,7 @@ For the supplied recordings, detection finds **25 presses per key except 6, whic
 python scripts/1_numpad/2_train.py
 ```
 
-`2_train.py` reads the numbered MP3s in `datasets/1_numpad/0/` through `9/`. Folder names are the class labels. It runs a fixed search of **72 configurations**: six feature profiles, each compared with RBF SVM, linear SVM, and shrinkage linear discriminant analysis (LDA) settings. The selected model uses **80 energy-weighted MFCC features and LDA with automatic covariance shrinkage**. The original model is preserved under `work/1_numpad/runs/baseline/`.
+`2_train.py` reads the numbered MP3s in `datasets/1_numpad/0/` through `9/`. Folder names are the class labels. It runs a fixed search of **72 configurations**: six feature profiles, each compared with RBF SVM, linear SVM, and shrinkage linear discriminant analysis (LDA) settings. The selected model in the recorded run uses **80 energy-weighted MFCC features and LDA with automatic covariance shrinkage**. Historical baseline metrics are retained in the [curated results](../../results/README.md).
 
 Training and prediction share the same preprocessing in `keypress_model.py`: decode to mono at 24 kHz, identify one isolated press, and align a 320 ms window beginning 40 ms before the strongest 5 ms RMS frame. Short context is padded. The window is DC-centered and peak-normalized, then converted to a 64-band mel spectrogram using a 512-sample Hann window and 128-sample hop. The selected representation contains weighted temporal means and standard deviations of 40 MFCCs. Frame weights are proportional to the square root of summed mel power and normalized to sum to one. Quiet background frames therefore contribute less than the press/release sounds, improving on the original uniform averaging. Clip length and long leading silence are not input features.
 
@@ -77,11 +90,15 @@ Results for the supplied dataset:
 | Measure | Original model | Improved model |
 | --- | --- | --- |
 | Repeated development validation, same partitions | 509/570 (89.30%) | 568/570 (99.65%) |
-| Chronological benchmark | 47/51 (92.16%) | 50/51 (98.04%) |
-| New `0789123456` recording | 5/10 (50%) | 8/10 (80%) |
-| New recording, top three choices | 9/10 (90%) | 10/10 (100%) |
+| Chronological benchmark within source recordings | 47/51 (92.16%) | 50/51 (98.04%) |
+| Separate `0789123456` recording | 5/10 (50%) | 8/10 (80%) |
+| Separate recording, top three choices | 9/10 (90%) | 10/10 (100%) |
 
 The expected external sequence is `0789123456`; the improved model predicts `0789113455`, confusing `2` with `1` and `6` with `5`. Both benchmark sets had already been observed before this improvement run; these are comparison results on existing benchmarks, rather than fresh untouched tests. All new model selection used development clips only.
+
+![Confusion matrix for the ten-key model on the 51 chronological benchmark clips](../../results/1_numpad/confusion_matrix.png)
+
+This matrix shows **50/51 correct** on later presses from the same source recordings, using the model fitted on 190 development clips. It does not describe the separate recording's **8/10** result or fresh-session performance.
 
 Each training key currently has one source recording, so recording conditions and key labels are confounded. The separate test recording has just one example per key. Collect several sessions containing all ten keys and reserve complete sessions for a stronger generalization assessment, including any new phone, microphone position, or keyboard. The evaluation design follows scikit-learn's guidance on [preprocessing leakage](https://scikit-learn.org/stable/common_pitfalls.html) and [correlated observations in validation](https://scikit-learn.org/stable/modules/cross_validation.html).
 
@@ -97,7 +114,7 @@ Training writes the following files to `work/1_numpad/`:
 
 The final model includes the former holdout clips in its training set. To reproduce the reported evaluation, use `evaluation_model.joblib`. Re-running training replaces these five artifacts. `--dataset-dir PATH` and `--output-dir PATH` override the defaults, which otherwise work from any working directory.
 
-The baseline and intermediate runs are preserved under `work/1_numpad/runs/`. `work/1_numpad/model_comparison.json` records this improvement run's before/after results.
+Local historical runs may exist under `work/1_numpad/runs/`; they are excluded from Git. The public [results directory](../../results/README.md) contains the selected comparison evidence and figures.
 
 ## Predict a key from audio
 

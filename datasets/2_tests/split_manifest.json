@@ -1,0 +1,233 @@
+{
+  "schema_version": 1,
+  "description": "One press + release per clip; contiguous sample ranges cover each recording completely.",
+  "encoder": "libmp3lame -q:a 0",
+  "gain": 1.0,
+  "gain_db": 0.0,
+  "analysis": {
+    "frame_seconds": 0.005,
+    "min_press_interval_seconds": 0.35,
+    "quiet_window_seconds": 0.05,
+    "after_press_guard_seconds": 0.2,
+    "before_press_guard_seconds": 0.1,
+    "max_peak_width_seconds": 0.05,
+    "min_attack_contrast": 4.0,
+    "quiet_signal_reference_factor": 0.125
+  },
+  "recordings": [
+    {
+      "source": "02310231023102310231.m4a",
+      "key_sequence": "02310231023102310231",
+      "source_sha256": "5e8141cfcafaff74873991bd5b31c08d5ee7e41b2b2dac342df41181296fac68",
+      "sample_rate": 48000,
+      "channels": 2,
+      "decoded_samples": 1161216,
+      "detected_presses": 20,
+      "noise_floor_rms": 9.156892695200147e-05,
+      "detection_threshold_rms": 0.0012803597600299066,
+      "quiet_threshold_rms": 0.0008002248500186916,
+      "clips": [
+        {
+          "file": "02310231023102310231/1-0.mp3",
+          "press_number": 1,
+          "key": "0",
+          "start_sample": 0,
+          "end_sample_exclusive": 83280,
+          "start_seconds": 0.0,
+          "end_seconds": 1.735,
+          "press_peak_sample": 58440
+        },
+        {
+          "file": "02310231023102310231/2-2.mp3",
+          "press_number": 2,
+          "key": "2",
+          "start_sample": 83280,
+          "end_sample_exclusive": 135120,
+          "start_seconds": 1.735,
+          "end_seconds": 2.815,
+          "press_peak_sample": 108360
+        },
+        {
+          "file": "02310231023102310231/3-3.mp3",
+          "press_number": 3,
+          "key": "3",
+          "start_sample": 135120,
+          "end_sample_exclusive": 189120,
+          "start_seconds": 2.815,
+          "end_seconds": 3.94,
+          "press_peak_sample": 162120
+        },
+        {
+          "file": "02310231023102310231/4-1.mp3",
+          "press_number": 4,
+          "key": "1",
+          "start_sample": 189120,
+          "end_sample_exclusive": 248160,
+          "start_seconds": 3.94,
+          "end_seconds": 5.17,
+          "press_peak_sample": 216600
+        },
+        {
+          "file": "02310231023102310231/5-0.mp3",
+          "press_number": 5,
+          "key": "0",
+          "start_sample": 248160,
+          "end_sample_exclusive": 304320,
+          "start_seconds": 5.17,
+          "end_seconds": 6.34,
+          "press_peak_sample": 279960
+        },
+        {
+          "file": "02310231023102310231/6-2.mp3",
+          "press_number": 6,
+          "key": "2",
+          "start_sample": 304320,
+          "end_sample_exclusive": 352080,
+          "start_seconds": 6.34,
+          "end_seconds": 7.335,
+          "press_peak_sample": 328920
+        },
+        {
+          "file": "02310231023102310231/7-3.mp3",
+          "press_number": 7,
+          "key": "3",
+          "start_sample": 352080,
+          "end_sample_exclusive": 401760,
+          "start_seconds": 7.335,
+          "end_seconds": 8.37,
+          "press_peak_sample": 375480
+        },
+        {
+          "file": "02310231023102310231/8-1.mp3",
+          "press_number": 8,
+          "key": "1",
+          "start_sample": 401760,
+          "end_sample_exclusive": 457920,
+          "start_seconds": 8.37,
+          "end_seconds": 9.54,
+          "press_peak_sample": 428280
+        },
+        {
+          "file": "02310231023102310231/9-0.mp3",
+          "press_number": 9,
+          "key": "0",
+          "start_sample": 457920,
+          "end_sample_exclusive": 512400,
+          "start_seconds": 9.54,
+          "end_seconds": 10.675,
+          "press_peak_sample": 487800
+        },
+        {
+          "file": "02310231023102310231/10-2.mp3",
+          "press_number": 10,
+          "key": "2",
+          "start_sample": 512400,
+          "end_sample_exclusive": 560880,
+          "start_seconds": 10.675,
+          "end_seconds": 11.685,
+          "press_peak_sample": 537240
+        },
+        {
+          "file": "02310231023102310231/11-3.mp3",
+          "press_number": 11,
+          "key": "3",
+          "start_sample": 560880,
+          "end_sample_exclusive": 606240,
+          "start_seconds": 11.685,
+          "end_seconds": 12.63,
+          "press_peak_sample": 584760
+        },
+        {
+          "file": "02310231023102310231/12-1.mp3",
+          "press_number": 12,
+          "key": "1",
+          "start_sample": 606240,
+          "end_sample_exclusive": 655920,
+          "start_seconds": 12.63,
+          "end_seconds": 13.665,
+          "press_peak_sample": 628200
+        },
+        {
+          "file": "02310231023102310231/13-0.mp3",
+          "press_number": 13,
+          "key": "0",
+          "start_sample": 655920,
+          "end_sample_exclusive": 708480,
+          "start_seconds": 13.665,
+          "end_seconds": 14.76,
+          "press_peak_sample": 684120
+        },
+        {
+          "file": "02310231023102310231/14-2.mp3",
+          "press_number": 14,
+          "key": "2",
+          "start_sample": 708480,
+          "end_sample_exclusive": 758880,
+          "start_seconds": 14.76,
+          "end_seconds": 15.81,
+          "press_peak_sample": 733080
+        },
+        {
+          "file": "02310231023102310231/15-3.mp3",
+          "press_number": 15,
+          "key": "3",
+          "start_sample": 758880,
+          "end_sample_exclusive": 809040,
+          "start_seconds": 15.81,
+          "end_seconds": 16.855,
+          "press_peak_sample": 785160
+        },
+        {
+          "file": "02310231023102310231/16-1.mp3",
+          "press_number": 16,
+          "key": "1",
+          "start_sample": 809040,
+          "end_sample_exclusive": 857760,
+          "start_seconds": 16.855,
+          "end_seconds": 17.87,
+          "press_peak_sample": 833400
+        },
+        {
+          "file": "02310231023102310231/17-0.mp3",
+          "press_number": 17,
+          "key": "0",
+          "start_sample": 857760,
+          "end_sample_exclusive": 910320,
+          "start_seconds": 17.87,
+          "end_seconds": 18.965,
+          "press_peak_sample": 882600
+        },
+        {
+          "file": "02310231023102310231/18-2.mp3",
+          "press_number": 18,
+          "key": "2",
+          "start_sample": 910320,
+          "end_sample_exclusive": 963600,
+          "start_seconds": 18.965,
+          "end_seconds": 20.075,
+          "press_peak_sample": 938520
+        },
+        {
+          "file": "02310231023102310231/19-3.mp3",
+          "press_number": 19,
+          "key": "3",
+          "start_sample": 963600,
+          "end_sample_exclusive": 1014240,
+          "start_seconds": 20.075,
+          "end_seconds": 21.13,
+          "press_peak_sample": 989160
+        },
+        {
+          "file": "02310231023102310231/20-1.mp3",
+          "press_number": 20,
+          "key": "1",
+          "start_sample": 1014240,
+          "end_sample_exclusive": 1161216,
+          "start_seconds": 21.13,
+          "end_seconds": 24.192,
+          "press_peak_sample": 1039560
+        }
+      ]
+    }
+  ]
+}
