@@ -39,7 +39,7 @@ The final four-key model also correctly recognized all **20 detected events** wh
 
 See the [results index](results/README.md) for before/after comparisons, per-press predictions, report provenance, and the limits of each evaluation.
 
-![Four-key development-recording confusion matrix](results/2_numpad/test_confusion_matrix.png)
+<img src="results/2_numpad/test_confusion_matrix.png" alt="Four-key development-recording confusion matrix" width="400">
 
 ## Repository layout
 
